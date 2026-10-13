@@ -1,0 +1,6 @@
+{
+  "name": "Surat Pengantar OJT Tc Surabaya",
+  "description": "Aplikasi pembuatan dan pencetakan Surat Pengantar On the Job Training (OJT) Calon Karyawan Store Crew Indomaret Training Center Cabang Surabaya.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
