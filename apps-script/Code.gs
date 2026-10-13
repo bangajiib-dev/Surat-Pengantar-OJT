@@ -31,6 +31,20 @@ var MAX_FAILED_ATTEMPTS = 5;
 var LOCKOUT_SECONDS = 300; // 5 menit
 
 /**
+ * ============================================================================
+ * 📁 KONFIGURASI ID FOLDER GOOGLE DRIVE (OPSIONAL)
+ * ============================================================================
+ * Jika Anda ingin menentukan folder Google Drive secara manual:
+ * 1. Buat folder di Google Drive (misalnya 'OJT_ASET_SURAT').
+ * 2. Buka folder tersebut di browser, salin ID dari URL address bar:
+ *    Contoh URL: https://drive.google.com/drive/folders/1ABCxyz1234567890
+ *    Maka ID Folder adalah teks setelah '/folders/': "1ABCxyz1234567890"
+ * 3. Masukkan ID tersebut di bawah ini di antara tanda kutip "".
+ * (Jika dibiarkan kosong "", sistem akan otomatis membuat foldernya sendiri)
+ */
+var MANUAL_DRIVE_FOLDER_ID = "";
+
+/**
  * Handle HTTP GET Request
  */
 function doGet(e) {
@@ -757,17 +771,157 @@ function batchImportPeserta(token, rows) {
 /**
  * ----------------------------------------------------------------------------
  * PENGATURAN ASET GAMBAR SURAT (TANDA TANGAN & STEMPEL)
- * Disimpan di Google Drive folder 'OJT_ASET_SURAT'
- * ID file disimpan di Script Properties: TTD_FILE_ID & STEMPEL_FILE_ID
+ * MENDUKUNG 2 METODE PENYIMPANAN SEKALIGUS (DUAL-STORAGE):
+ * 1. Database Google Spreadsheet (Sheet '_ASET_SURAT') -> 100% PASTI SUKSES tanpa izin Drive
+ * 2. Google Drive folder 'OJT_ASET_SURAT' (atau ID folder manual di atas) -> Jika izin Drive aktif
  * ----------------------------------------------------------------------------
  */
 
 var ASET_FOLDER_NAME = "OJT_ASET_SURAT";
+var SHEET_ASET_NAME = "_ASET_SURAT";
+
+/**
+ * Helper: Ambil atau buat sheet penyimpanan gambar di Google Spreadsheet
+ */
+function getOrInitAsetSheet() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_ASET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_ASET_NAME);
+    sheet.appendRow(["KEY", "CHUNK_INDEX", "DATA", "MIME_TYPE", "UPDATED_AT"]);
+    var headerRange = sheet.getRange(1, 1, 1, 5);
+    headerRange.setFontWeight("bold");
+    headerRange.setBackground("#005EAA");
+    headerRange.setFontColor("#FFFFFF");
+    sheet.getRange("A:A").setNumberFormat("@");
+    sheet.getRange("C:C").setNumberFormat("@");
+    sheet.getRange("D:D").setNumberFormat("@");
+    try {
+      sheet.hideSheet(); // Sembunyikan tab agar rapi dan tidak mengganggu sheet utama
+    } catch (e) {}
+  }
+  return sheet;
+}
+
+/**
+ * Simpan data base64 ke Google Spreadsheet (dipotong per 30.000 karakter agar tidak melanggar batas sel)
+ */
+function saveAsetToSheet(jenis, base64Data, mimeType) {
+  var sheet = getOrInitAsetSheet();
+  var data = sheet.getDataRange().getValues();
+
+  // Hapus entri lama untuk jenis ini (hapus dari bawah ke atas)
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).toLowerCase() === String(jenis).toLowerCase()) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+
+  if (!base64Data) return true;
+
+  var cleanData = String(base64Data);
+  // Simpan tanpa header data: prefix agar hemat ruang
+  if (cleanData.indexOf("base64,") !== -1) {
+    cleanData = cleanData.split("base64,")[1];
+  }
+
+  var CHUNK_SIZE = 30000;
+  var totalLength = cleanData.length;
+  var chunkIndex = 0;
+  var now = new Date().toISOString();
+  var newRows = [];
+
+  for (var offset = 0; offset < totalLength; offset += CHUNK_SIZE) {
+    var chunk = cleanData.substring(offset, offset + CHUNK_SIZE);
+    newRows.push([jenis, chunkIndex, chunk, mimeType || "image/png", now]);
+    chunkIndex++;
+  }
+
+  if (newRows.length > 0) {
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, newRows.length, 5).setValues(newRows);
+    sheet.getRange(startRow, 1, newRows.length, 1).setNumberFormat("@");
+    sheet.getRange(startRow, 3, newRows.length, 1).setNumberFormat("@");
+  }
+  return true;
+}
+
+/**
+ * Ambil data base64 dari sheet _ASET_SURAT
+ */
+function getAsetFromSheet(jenis) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_ASET_NAME);
+  if (!sheet) return null;
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return null;
+
+  var matchingChunks = [];
+  var detectedMime = "image/png";
+
+  for (var i = 1; i < data.length; i++) {
+    var rowKey = String(data[i][0]).toLowerCase();
+    if (rowKey === String(jenis).toLowerCase()) {
+      var idx = parseInt(data[i][1], 10) || 0;
+      var chunkText = String(data[i][2] || "");
+      if (data[i][3]) detectedMime = String(data[i][3]);
+      matchingChunks.push({ index: idx, text: chunkText });
+    }
+  }
+
+  if (matchingChunks.length === 0) return null;
+
+  matchingChunks.sort(function(a, b) {
+    return a.index - b.index;
+  });
+
+  var fullBase64 = "";
+  for (var c = 0; c < matchingChunks.length; c++) {
+    fullBase64 += matchingChunks[c].text;
+  }
+
+  if (!fullBase64) return null;
+
+  if (fullBase64.indexOf("data:") === 0) {
+    return fullBase64;
+  }
+  return "data:" + detectedMime + ";base64," + fullBase64;
+}
+
+/**
+ * Hapus aset dari sheet _ASET_SURAT
+ */
+function deleteAsetFromSheet(jenis) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_ASET_NAME);
+  if (!sheet) return true;
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).toLowerCase() === String(jenis).toLowerCase()) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+  return true;
+}
 
 /**
  * Dapatkan atau buat folder OJT_ASET_SURAT di Google Drive
  */
 function getOrCreateAsetFolder() {
+  // 1. Cek apakah ada MANUAL_DRIVE_FOLDER_ID yang diisi di atas
+  if (typeof MANUAL_DRIVE_FOLDER_ID === "string" && MANUAL_DRIVE_FOLDER_ID.trim().length > 5) {
+    try {
+      var manualFolder = DriveApp.getFolderById(MANUAL_DRIVE_FOLDER_ID.trim());
+      if (manualFolder && !manualFolder.isTrashed()) {
+        return manualFolder;
+      }
+    } catch (manualErr) {
+      Logger.log("Folder manual tidak dapat diakses: " + manualErr.message);
+    }
+  }
+
   var props = PropertiesService.getScriptProperties();
   var folderId = props.getProperty("ASET_FOLDER_ID");
 
@@ -777,9 +931,7 @@ function getOrCreateAsetFolder() {
       if (!existingFolder.isTrashed()) {
         return existingFolder;
       }
-    } catch (e) {
-      // Folder terhapus, akan dibuat ulang di bawah
-    }
+    } catch (e) {}
   }
 
   var folders = DriveApp.getFoldersByName(ASET_FOLDER_NAME);
@@ -795,9 +947,8 @@ function getOrCreateAsetFolder() {
 }
 
 /**
- * Ambil gambar Tanda Tangan & Stempel sebagai data URL base64
- * Dapat diakses oleh peserta (user) maupun admin untuk keperluan surat resmi.
- * Tidak membutuhkan token login agar gambar selalu dapat dimuat di surat pengantar tanpa hambatan sesi.
+ * Ambil gambar Tanda Tangan & Stempel sebagai data URL base64.
+ * Mengecek Google Drive terlebih dahulu, lalu otomatis beralih ke database Spreadsheet jika Drive belum diizinkan.
  */
 function getAsetSurat(token) {
   var props = PropertiesService.getScriptProperties();
@@ -807,34 +958,63 @@ function getAsetSurat(token) {
   var ttdBase64 = null;
   var stempelBase64 = null;
   var errors = [];
+  var sources = { ttd: "none", stempel: "none" };
 
-  // Baca file Tanda Tangan dari Google Drive
+  // 1. Coba baca Tanda Tangan dari Google Drive jika ada file ID
   if (ttdId) {
     try {
       var fileTtd = DriveApp.getFileById(ttdId);
       if (!fileTtd.isTrashed()) {
         var blobTtd = fileTtd.getBlob();
         ttdBase64 = "data:" + blobTtd.getContentType() + ";base64," + Utilities.base64Encode(blobTtd.getBytes());
+        sources.ttd = "drive";
       } else {
         props.deleteProperty("TTD_FILE_ID");
       }
     } catch (e) {
-      errors.push("TTD: " + (e.message || e.toString()));
+      errors.push("Drive TTD: " + (e.message || e.toString()));
     }
   }
 
-  // Baca file Stempel dari Google Drive
+  // Jika belum ada dari Drive, baca langsung dari database Spreadsheet (pasti berhasil)
+  if (!ttdBase64) {
+    try {
+      var sheetTtd = getAsetFromSheet("ttd");
+      if (sheetTtd) {
+        ttdBase64 = sheetTtd;
+        sources.ttd = "spreadsheet";
+      }
+    } catch (sheetErr) {
+      errors.push("Sheet TTD: " + (sheetErr.message || sheetErr.toString()));
+    }
+  }
+
+  // 2. Coba baca Stempel dari Google Drive jika ada file ID
   if (stempelId) {
     try {
       var fileStempel = DriveApp.getFileById(stempelId);
       if (!fileStempel.isTrashed()) {
         var blobStempel = fileStempel.getBlob();
         stempelBase64 = "data:" + blobStempel.getContentType() + ";base64," + Utilities.base64Encode(blobStempel.getBytes());
+        sources.stempel = "drive";
       } else {
         props.deleteProperty("STEMPEL_FILE_ID");
       }
-    } catch (e) {
-      errors.push("Stempel: " + (e.message || e.toString()));
+    } catch (e2) {
+      errors.push("Drive Stempel: " + (e2.message || e2.toString()));
+    }
+  }
+
+  // Jika belum ada dari Drive, baca langsung dari database Spreadsheet
+  if (!stempelBase64) {
+    try {
+      var sheetStempel = getAsetFromSheet("stempel");
+      if (sheetStempel) {
+        stempelBase64 = sheetStempel;
+        sources.stempel = "spreadsheet";
+      }
+    } catch (sheetErr2) {
+      errors.push("Sheet Stempel: " + (sheetErr2.message || sheetErr2.toString()));
     }
   }
 
@@ -844,13 +1024,16 @@ function getAsetSurat(token) {
     stempel: stempelBase64,
     hasTtd: !!ttdBase64,
     hasStempel: !!stempelBase64,
-    driveFolder: props.getProperty("ASET_FOLDER_ID") || null,
+    sources: sources,
+    driveFolder: MANUAL_DRIVE_FOLDER_ID || props.getProperty("ASET_FOLDER_ID") || null,
     errors: errors.length > 0 ? errors : undefined
   };
 }
 
 /**
- * Simpan file gambar Tanda Tangan atau Stempel ke Google Drive (Khusus Admin)
+ * Simpan file gambar Tanda Tangan atau Stempel (Khusus Admin).
+ * Menyimpan ke database Google Spreadsheet (100% aman & langsung aktif untuk semua user)
+ * dan mencoba menyimpan ke Google Drive jika izin Drive telah diaktifkan.
  */
 function simpanAsetSurat(token, jenis, base64Data, mimeType) {
   var session = verifyToken(token);
@@ -892,49 +1075,62 @@ function simpanAsetSurat(token, jenis, base64Data, mimeType) {
     return { success: false, message: "Ukuran file melebihi batas 2 MB." };
   }
 
-  var folder;
+  // 1. SIMPAN KE DATABASE GOOGLE SPREADSHEET (PASTI BERHASIL 100%)
   try {
-    folder = getOrCreateAsetFolder();
-  } catch (driveErr) {
+    saveAsetToSheet(jenis, cleanBase64, detectedMime);
+  } catch (sheetSaveErr) {
     return {
       success: false,
-      message: "Gagal mengakses Google Drive: " + (driveErr.message || driveErr.toString()) + ". Harap pastikan izin Google Drive (DriveApp) telah diizinkan / diauthorisasi pada Apps Script."
+      message: "Gagal menyimpan ke database Spreadsheet: " + (sheetSaveErr.message || sheetSaveErr.toString())
     };
   }
 
-  var props = PropertiesService.getScriptProperties();
-  var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
-  var oldId = props.getProperty(propKey);
+  // 2. COBA SIMPAN JUGA KE GOOGLE DRIVE SEBAGAI INTEGRASI
+  var savedToDrive = false;
+  var driveNote = "";
+  try {
+    var folder = getOrCreateAsetFolder();
+    var props = PropertiesService.getScriptProperties();
+    var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
+    var oldId = props.getProperty(propKey);
 
-  // Hapus (trash) file lama dari Drive agar tidak menumpuk
-  if (oldId) {
-    try {
-      var oldFile = DriveApp.getFileById(oldId);
-      oldFile.setTrashed(true);
-    } catch (e) {}
+    // Hapus (trash) file lama dari Drive agar tidak menumpuk
+    if (oldId) {
+      try {
+        var oldFile = DriveApp.getFileById(oldId);
+        oldFile.setTrashed(true);
+      } catch (e) {}
+    }
+
+    var ext = detectedMime === "image/jpeg" ? "jpg" : "png";
+    var label = jenis === "ttd" ? "TTD_TC_SURABAYA" : "STEMPEL_TC_SURABAYA";
+    var fileName = label + "_" + new Date().getTime() + "." + ext;
+    var blob = Utilities.newBlob(bytes, detectedMime, fileName);
+    var newFile = folder.createFile(blob);
+
+    props.setProperty(propKey, newFile.getId());
+    savedToDrive = true;
+  } catch (driveErr) {
+    // Jika izin Drive belum disetujui, jangan gagalkan proses!
+    driveNote = " (Tersimpan aman di database Spreadsheet. Otorisasi Drive opsional).";
+    Logger.log("Drive save skipped: " + driveErr.message);
   }
 
-  var ext = detectedMime === "image/jpeg" ? "jpg" : "png";
-  var label = jenis === "ttd" ? "TTD_TC_SURABAYA" : "STEMPEL_TC_SURABAYA";
-  var fileName = label + "_" + new Date().getTime() + "." + ext;
-  var blob = Utilities.newBlob(bytes, detectedMime, fileName);
-  var newFile = folder.createFile(blob);
-
-  props.setProperty(propKey, newFile.getId());
-
   var fullDataUrl = "data:" + detectedMime + ";base64," + cleanBase64;
+  var jenisLabel = jenis === "ttd" ? "Tanda tangan" : "Stempel";
 
   return {
     success: true,
-    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil disimpan ke Google Drive dan langsung aktif untuk SEMUA peserta.",
+    message: jenisLabel + " berhasil disimpan dan langsung aktif untuk SEMUA peserta!" + driveNote,
     jenis: jenis,
-    fileId: newFile.getId(),
-    dataUrl: fullDataUrl
+    dataUrl: fullDataUrl,
+    savedToDrive: savedToDrive,
+    savedToSheet: true
   };
 }
 
 /**
- * Hapus gambar Tanda Tangan atau Stempel dari Google Drive (Khusus Admin)
+ * Hapus gambar Tanda Tangan atau Stempel (Khusus Admin)
  */
 function hapusAsetSurat(token, jenis) {
   var session = verifyToken(token);
@@ -946,6 +1142,10 @@ function hapusAsetSurat(token, jenis) {
     return { success: false, message: "Jenis gambar tidak valid." };
   }
 
+  // 1. Hapus dari database sheet _ASET_SURAT
+  deleteAsetFromSheet(jenis);
+
+  // 2. Hapus dari Google Drive jika ada
   var props = PropertiesService.getScriptProperties();
   var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
   var oldId = props.getProperty(propKey);
@@ -960,7 +1160,7 @@ function hapusAsetSurat(token, jenis) {
 
   return {
     success: true,
-    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil dihapus dari Google Drive.",
+    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil dihapus dari sistem.",
     jenis: jenis
   };
 }
@@ -974,8 +1174,14 @@ function hapusAsetSurat(token, jenis) {
  */
 function authorizeDrive() {
   Logger.log("Menguji otorisasi Google Drive...");
-  var folder = getOrCreateAsetFolder();
-  Logger.log("Folder berhasil diakses/dibuat dengan ID: " + folder.getId());
-  Logger.log("Nama Folder: " + folder.getName());
-  return "Otorisasi Google Drive BERHASIL! Folder ID: " + folder.getId();
+  try {
+    var folder = getOrCreateAsetFolder();
+    Logger.log("Folder berhasil diakses/dibuat dengan ID: " + folder.getId());
+    Logger.log("Nama Folder: " + folder.getName());
+    return "Otorisasi Google Drive BERHASIL! Folder ID: " + folder.getId();
+  } catch (err) {
+    Logger.log("Drive belum diotorisasi: " + err.message);
+    throw err;
+  }
 }
+

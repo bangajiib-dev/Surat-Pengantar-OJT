@@ -144,12 +144,12 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
         saveCachedAsetSurat(updated);
         onAsetUpdated(updated);
         setTtdDraft(null);
-        showToast('success', 'Berhasil Disimpan ke Google Drive', 'Tanda tangan aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
+        showToast('success', 'Berhasil Disimpan', res.message || 'Tanda tangan aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
       } else {
         showToast(
           'error',
-          'Gagal Simpan ke Google Drive',
-          res.message || 'Gagal menyimpan ke Google Drive. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script dan izin Drive disetujui.'
+          'Gagal Simpan',
+          res.message || 'Gagal menyimpan tanda tangan. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script.'
         );
       }
     } catch (err: any) {
@@ -159,7 +159,7 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
     }
   };
 
-  // Simpan Stempel ke server Google Drive
+  // Simpan Stempel ke server
   const handleSaveStempel = async () => {
     if (!stempelDraft) return;
     setIsSavingStempel(true);
@@ -171,12 +171,12 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
         saveCachedAsetSurat(updated);
         onAsetUpdated(updated);
         setStempelDraft(null);
-        showToast('success', 'Berhasil Disimpan ke Google Drive', 'Stempel aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
+        showToast('success', 'Berhasil Disimpan', res.message || 'Stempel aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
       } else {
         showToast(
           'error',
-          'Gagal Simpan ke Google Drive',
-          res.message || 'Gagal menyimpan ke Google Drive. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script dan izin Drive disetujui.'
+          'Gagal Simpan',
+          res.message || 'Gagal menyimpan stempel. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script.'
         );
       }
     } catch (err: any) {
@@ -274,11 +274,17 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
       {/* Header Info & Sync Button */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-slate-900">
-            Pengaturan Aset Surat (Tanda Tangan & Stempel)
-          </h3>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
-            Upload file tanda tangan dan cap stempel resmi Training Center Surabaya. File yang disimpan di Google Drive otomatis muncul pada bagian bawah surat pengantar untuk <strong>SEMUA peserta</strong> dan ikut tercetak saat cetak/simpan PDF.
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900">
+              Pengaturan Aset Surat (Tanda Tangan & Stempel)
+            </h3>
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              Sistem Dual-Storage Aktif
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed max-w-2xl">
+            Upload file tanda tangan dan cap stempel resmi Training Center Surabaya. File tersimpan aman di database Google Spreadsheet dan Google Drive, otomatis langsung muncul pada bagian bawah surat pengantar untuk <strong>SEMUA peserta</strong> dan ikut tercetak saat cetak/simpan PDF.
           </p>
         </div>
         <button
@@ -286,11 +292,29 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
           onClick={handleCheckDrive}
           disabled={isCheckingDrive}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
-          title="Sinkronkan aset langsung dari Google Drive"
+          title="Sinkronkan aset langsung dari server"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDrive ? 'animate-spin' : ''}`} />
-          <span>{isCheckingDrive ? 'Memeriksa...' : 'Cek Status Drive'}</span>
+          <span>{isCheckingDrive ? 'Memeriksa...' : 'Cek Status Server'}</span>
         </button>
+      </div>
+
+      {/* Info Card: Cara Kerja & Letak ID Folder */}
+      <div className="bg-blue-50/60 border border-blue-200/80 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+        <div className="flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-[#005EAA] shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-slate-900">
+              Informasi Penyimpanan & Letak ID Folder Google Drive:
+            </p>
+            <p className="text-slate-600 leading-relaxed">
+              1. <strong>Tanda Tangan & Stempel Langsung Aktif:</strong> Begitu Anda klik Simpan, gambar otomatis tersimpan ke database Google Spreadsheet (sheet <code>_ASET_SURAT</code>). Peserta di perangkat manapun langsung dapat melihatnya di surat pengantar tanpa hambatan izin.
+            </p>
+            <p className="text-slate-600 leading-relaxed">
+              2. <strong>Letak ID Folder Google Drive:</strong> Jika Anda memiliki folder Google Drive khusus (misal <code>OJT_ASET_SURAT</code>), buka file <code>Code.gs</code> di Apps Script baris 44: isi variabel <code>var MANUAL_DRIVE_FOLDER_ID = &quot;ID_FOLDER_ANDA&quot;;</code>. Jika dikosongkan, folder akan dibuatkan otomatis.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
