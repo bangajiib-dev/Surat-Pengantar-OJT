@@ -26,7 +26,6 @@ interface AdminDashboardProps {
   onAddPeserta: () => void;
   onEditPeserta: (peserta: Peserta) => void;
   onOpenImport: () => void;
-  onOpenPanduan: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -37,7 +36,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddPeserta,
   onEditPeserta,
   onOpenImport,
-  onOpenPanduan,
 }) => {
   const [pesertaList, setPesertaList] = useState<Peserta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -232,22 +230,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
 
-        {/* Quick Action Helper */}
+        {/* Stat 4: Sistem Database */}
         <div className="bg-gradient-to-br from-blue-900 to-[#005EAA] p-5 rounded-xl text-white shadow-xs flex flex-col justify-between">
           <div>
             <p className="text-xs font-medium text-blue-200">
               Training Center Surabaya
             </p>
             <h4 className="text-sm font-bold mt-0.5">
-              Kelola Sheet DATA_PESERTA
+              Database DATA_PESERTA
             </h4>
           </div>
-          <button
-            onClick={onOpenPanduan}
-            className="text-xs text-white/90 underline hover:text-white mt-2 self-start font-medium cursor-pointer"
-          >
-            Lihat Panduan Setup &gt;
-          </button>
+          <div className="text-xs text-blue-100 flex items-center gap-1.5 mt-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Terhubung Live</span>
+          </div>
         </div>
       </div>
 

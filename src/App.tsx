@@ -226,13 +226,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Header Aplikasi (Tersembunyi saat cetak) */}
-      <Header
-        session={session}
-        appsScriptUrl={appsScriptUrl}
-        onLogout={handleLogout}
-        onOpenSettings={() => setIsModalSettingsOpen(true)}
-        onOpenPanduan={() => setIsModalPanduanOpen(true)}
-      />
+      <Header session={session} onLogout={handleLogout} />
 
       {/* Main Content Area */}
       <main className="flex-1">
@@ -281,38 +275,20 @@ export default function App() {
               setIsModalPesertaOpen(true);
             }}
             onOpenImport={() => setIsModalImportOpen(true)}
-            onOpenPanduan={() => setIsModalPanduanOpen(true)}
           />
         ) : (
           // TAMPILAN BELUM LOGIN (FORM LOGIN)
           <LoginForm
             onLoginSuccess={handleLoginSuccess}
             showToast={showToast}
-            isConnected={!!appsScriptUrl}
-            onOpenSettings={() => setIsModalSettingsOpen(true)}
           />
         )}
       </main>
 
       {/* Footer (Tersembunyi saat cetak) */}
       <footer className="no-print bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-center">
           <p>© {new Date().getFullYear()} PT. Indomarco Prismatama · Cabang Surabaya. All rights reserved.</p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsModalPanduanOpen(true)}
-              className="text-blue-600 hover:underline cursor-pointer"
-            >
-              Panduan Setup
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => setIsModalSettingsOpen(true)}
-              className="text-blue-600 hover:underline cursor-pointer"
-            >
-              Konfigurasi Apps Script
-            </button>
-          </div>
         </div>
       </footer>
 

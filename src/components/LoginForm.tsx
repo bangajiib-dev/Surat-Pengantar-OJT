@@ -1,20 +1,16 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, User, Shield, ArrowRight, Settings, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, Shield, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
 import { AuthSession } from '../types';
 
 interface LoginFormProps {
   onLoginSuccess: (session: AuthSession) => void;
   showToast: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
-  isConnected: boolean;
-  onOpenSettings: () => void;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({
   onLoginSuccess,
   showToast,
-  isConnected,
-  onOpenSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<'user' | 'admin'>('user');
 
@@ -35,12 +31,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     e.preventDefault();
     const cleanNip = nip.trim();
     const cleanPass = userPassword.trim();
-
-    if (!isConnected) {
-      showToast('error', 'Database Belum Terhubung', 'Silakan atur URL Google Apps Script terlebih dahulu melalui tombol Pengaturan.');
-      onOpenSettings();
-      return;
-    }
 
     if (!cleanNip) {
       showToast('error', 'Validasi Gagal', 'Silakan masukkan NIP Anda.');
@@ -69,7 +59,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         showToast('error', 'Login Gagal', res.message || 'NIP atau Password salah.');
       }
     } catch (err: any) {
-      showToast('error', 'Kesalahan Sistem', err.message || 'Gagal menghubungi server Google Spreadsheet.');
+      showToast('error', 'Kesalahan Sistem', err.message || 'Gagal menghubungi server.');
     } finally {
       setIsLoading(false);
     }
@@ -80,12 +70,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     e.preventDefault();
     const cleanUser = adminUsername.trim();
     const cleanPass = adminPassword.trim();
-
-    if (!isConnected) {
-      showToast('error', 'Database Belum Terhubung', 'Silakan atur URL Google Apps Script terlebih dahulu melalui tombol Pengaturan.');
-      onOpenSettings();
-      return;
-    }
 
     if (!cleanUser) {
       showToast('error', 'Validasi Gagal', 'Silakan masukkan Username Admin.');
@@ -110,7 +94,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         showToast('error', 'Login Gagal', res.message || 'Username atau Password Admin salah.');
       }
     } catch (err: any) {
-      showToast('error', 'Kesalahan Sistem', err.message || 'Gagal menghubungi server Google Spreadsheet.');
+      showToast('error', 'Kesalahan Sistem', err.message || 'Gagal menghubungi server.');
     } finally {
       setIsLoading(false);
     }
@@ -119,27 +103,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   return (
     <div className="min-h-[calc(100vh-130px)] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all">
-        {/* Banner Peringatan jika URL belum dipasang */}
-        {!isConnected && (
-          <div className="bg-amber-50 border-b border-amber-200 p-3.5 flex items-start gap-2.5 text-xs text-amber-900">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold">Spreadsheet Belum Dihubungkan</p>
-              <p className="text-[11px] text-amber-800 mt-0.5">
-                Masukkan URL Web App Google Apps Script Anda agar data tersinkronisasi live.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded text-[11px] shrink-0 cursor-pointer"
-            >
-              <Settings className="w-3 h-3" />
-              <span>Atur URL</span>
-            </button>
-          </div>
-        )}
-
         {/* Card Header dengan Logo Indomaret */}
         <div className="p-6 sm:p-8 text-center bg-gradient-to-b from-blue-50/50 to-white border-b border-slate-100">
           <div className="inline-flex items-center justify-center p-3 bg-white rounded-2xl shadow-sm border border-slate-200 mb-3">
@@ -209,9 +172,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                     className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EAA] focus:border-transparent transition-all font-mono"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Sesuai data di Google Spreadsheet DATA_PESERTA.
-                </p>
               </div>
 
               {/* Input Password */}
@@ -294,7 +254,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                     type={showAdminPassword ? 'text' : 'password'}
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Masukkan Password Admin (Tcsby123)"
+                    placeholder="Masukkan Password Admin"
                     required
                     autoComplete="current-password"
                     className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#005EAA] focus:border-transparent transition-all"
@@ -307,9 +267,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                     {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Password admin: <strong>Tcsby123</strong>
-                </p>
               </div>
 
               {/* Submit Button */}

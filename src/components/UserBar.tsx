@@ -1,5 +1,4 @@
-import React from 'react';
-import { Printer, LogOut, User, FileText, RefreshCw } from 'lucide-react';
+import { Printer, LogOut, User, RefreshCw } from 'lucide-react';
 import { UserSession } from '../types';
 
 interface UserBarProps {
@@ -69,16 +68,6 @@ export const UserBar: React.FC<UserBarProps> = ({ user, onLogout, onSync, isSync
             <LogOut className="w-4 h-4" />
             <span className="hidden sm:inline">Keluar</span>
           </button>
-        </div>
-      </div>
-
-      {/* Info strip petunjuk cetak & status live sync */}
-      <div className="bg-amber-50 border-t border-b border-amber-200 px-4 py-1.5 text-xs text-amber-900 flex items-center justify-between gap-2 text-center">
-        <div className="flex items-center gap-1.5 mx-auto">
-          <FileText className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-          <span>
-            Tip Cetak: Pilih <strong>Destination: Save as PDF</strong> dan kertas <strong>A4</strong>. Data disinkronkan secara live dengan Google Spreadsheet.
-          </span>
         </div>
       </div>
     </div>
