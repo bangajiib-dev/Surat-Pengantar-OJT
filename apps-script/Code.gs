@@ -214,26 +214,84 @@ function formatTanggalIndo(val) {
 }
 
 /**
- * Manajemen Token Sesi menggunakan CacheService
+ * Manajemen Token Sesi menggunakan HMAC SHA-256 & CacheService
+ * Menjamin token tetap valid dan tidak hilang saat container Google Apps Script restart
  */
+function getAuthSecret() {
+  var props = PropertiesService.getScriptProperties();
+  var secret = props.getProperty("AUTH_SECRET");
+  if (!secret) {
+    secret = Utilities.getUuid() + "_" + new Date().getTime();
+    props.setProperty("AUTH_SECRET", secret);
+  }
+  return secret;
+}
+
 function generateToken(payload) {
-  var token = Utilities.getUuid();
-  var cache = CacheService.getScriptCache();
-  // Sesi berlaku 6 jam (21600 detik)
-  cache.put("token_" + token, JSON.stringify(payload), 21600);
-  return token;
+  var secret = getAuthSecret();
+  var now = new Date().getTime();
+  var exp = now + (6 * 3600 * 1000); // Sesi berlaku 6 jam
+  var data = {
+    role: payload.role,
+    nip: payload.nip || "",
+    nama: payload.nama || "",
+    username: payload.username || "",
+    exp: exp,
+    nonce: Utilities.getUuid()
+  };
+  var jsonStr = JSON.stringify(data);
+  var base64Data = Utilities.base64EncodeWebSafe(jsonStr);
+  var signature = Utilities.computeHmacSha256Signature(base64Data, secret);
+  var base64Sig = Utilities.base64EncodeWebSafe(signature);
+  var signedToken = base64Data + "." + base64Sig;
+
+  // Tetap simpan di CacheService untuk kompatibilitas ganda
+  try {
+    var cache = CacheService.getScriptCache();
+    cache.put("token_" + signedToken, jsonStr, 21600);
+  } catch (e) {}
+
+  return signedToken;
 }
 
 function verifyToken(token) {
   if (!token) return null;
-  var cache = CacheService.getScriptCache();
-  var data = cache.get("token_" + token);
-  if (!data) return null;
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    return null;
+
+  // 1. Cek signed token format (base64Data.base64Sig)
+  if (token.indexOf(".") !== -1) {
+    var parts = token.split(".");
+    if (parts.length === 2) {
+      try {
+        var base64Data = parts[0];
+        var base64Sig = parts[1];
+        var secret = getAuthSecret();
+        var expectedSig = Utilities.computeHmacSha256Signature(base64Data, secret);
+        var expectedSigB64 = Utilities.base64EncodeWebSafe(expectedSig);
+        if (base64Sig === expectedSigB64) {
+          var decodedBytes = Utilities.base64DecodeWebSafe(base64Data);
+          var jsonStr = Utilities.newBlob(decodedBytes).getDataAsString();
+          var data = JSON.parse(jsonStr);
+          if (data.exp && new Date().getTime() > data.exp) {
+            return null; // Token kedaluwarsa
+          }
+          return data;
+        }
+      } catch (e) {
+        // Fallback ke cache check
+      }
+    }
   }
+
+  // 2. Fallback ke CacheService (untuk UUID token lama jika masih ada)
+  try {
+    var cache = CacheService.getScriptCache();
+    var data = cache.get("token_" + token);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {}
+
+  return null;
 }
 
 /**
@@ -738,22 +796,19 @@ function getOrCreateAsetFolder() {
 
 /**
  * Ambil gambar Tanda Tangan & Stempel sebagai data URL base64
- * Dapat diakses oleh user atau admin dengan token valid
+ * Dapat diakses oleh peserta (user) maupun admin untuk keperluan surat resmi.
+ * Tidak membutuhkan token login agar gambar selalu dapat dimuat di surat pengantar tanpa hambatan sesi.
  */
 function getAsetSurat(token) {
-  var session = verifyToken(token);
-  if (!session) {
-    return { success: false, message: "Sesi tidak valid. Silakan login kembali." };
-  }
-
   var props = PropertiesService.getScriptProperties();
   var ttdId = props.getProperty("TTD_FILE_ID");
   var stempelId = props.getProperty("STEMPEL_FILE_ID");
 
   var ttdBase64 = null;
   var stempelBase64 = null;
+  var errors = [];
 
-  // Baca file Tanda Tangan
+  // Baca file Tanda Tangan dari Google Drive
   if (ttdId) {
     try {
       var fileTtd = DriveApp.getFileById(ttdId);
@@ -764,11 +819,11 @@ function getAsetSurat(token) {
         props.deleteProperty("TTD_FILE_ID");
       }
     } catch (e) {
-      props.deleteProperty("TTD_FILE_ID");
+      errors.push("TTD: " + (e.message || e.toString()));
     }
   }
 
-  // Baca file Stempel
+  // Baca file Stempel dari Google Drive
   if (stempelId) {
     try {
       var fileStempel = DriveApp.getFileById(stempelId);
@@ -779,14 +834,18 @@ function getAsetSurat(token) {
         props.deleteProperty("STEMPEL_FILE_ID");
       }
     } catch (e) {
-      props.deleteProperty("STEMPEL_FILE_ID");
+      errors.push("Stempel: " + (e.message || e.toString()));
     }
   }
 
   return {
     success: true,
     ttd: ttdBase64,
-    stempel: stempelBase64
+    stempel: stempelBase64,
+    hasTtd: !!ttdBase64,
+    hasStempel: !!stempelBase64,
+    driveFolder: props.getProperty("ASET_FOLDER_ID") || null,
+    errors: errors.length > 0 ? errors : undefined
   };
 }
 
@@ -796,7 +855,10 @@ function getAsetSurat(token) {
 function simpanAsetSurat(token, jenis, base64Data, mimeType) {
   var session = verifyToken(token);
   if (!session || session.role !== "admin") {
-    return { success: false, message: "Akses ditolak. Hanya untuk Admin." };
+    return {
+      success: false,
+      message: "Akses ditolak. Sesi Admin tidak valid atau telah berakhir. Silakan login kembali sebagai Admin."
+    };
   }
 
   if (jenis !== "ttd" && jenis !== "stempel") {
@@ -830,7 +892,16 @@ function simpanAsetSurat(token, jenis, base64Data, mimeType) {
     return { success: false, message: "Ukuran file melebihi batas 2 MB." };
   }
 
-  var folder = getOrCreateAsetFolder();
+  var folder;
+  try {
+    folder = getOrCreateAsetFolder();
+  } catch (driveErr) {
+    return {
+      success: false,
+      message: "Gagal mengakses Google Drive: " + (driveErr.message || driveErr.toString()) + ". Harap pastikan izin Google Drive (DriveApp) telah diizinkan / diauthorisasi pada Apps Script."
+    };
+  }
+
   var props = PropertiesService.getScriptProperties();
   var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
   var oldId = props.getProperty(propKey);
@@ -855,7 +926,7 @@ function simpanAsetSurat(token, jenis, base64Data, mimeType) {
 
   return {
     success: true,
-    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil disimpan ke Google Drive.",
+    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil disimpan ke Google Drive dan langsung aktif untuk SEMUA peserta.",
     jenis: jenis,
     fileId: newFile.getId(),
     dataUrl: fullDataUrl
@@ -868,7 +939,7 @@ function simpanAsetSurat(token, jenis, base64Data, mimeType) {
 function hapusAsetSurat(token, jenis) {
   var session = verifyToken(token);
   if (!session || session.role !== "admin") {
-    return { success: false, message: "Akses ditolak. Hanya untuk Admin." };
+    return { success: false, message: "Akses ditolak. Sesi Admin telah berakhir. Silakan login kembali." };
   }
 
   if (jenis !== "ttd" && jenis !== "stempel") {
@@ -889,7 +960,7 @@ function hapusAsetSurat(token, jenis) {
 
   return {
     success: true,
-    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil dihapus.",
+    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil dihapus dari Google Drive.",
     jenis: jenis
   };
 }

@@ -100,9 +100,12 @@ export const api = {
   batchImportPeserta: (token: string, rows: Peserta[]) =>
     callAppsScript({ action: 'batchImportPeserta', token, rows }),
 
-  // Ambil aset gambar surat (Tanda Tangan & Stempel) dari Google Drive
-  getAsetSurat: (token: string) =>
-    callAppsScript<{ ttd: string | null; stempel: string | null }>({ action: 'getAsetSurat', token }),
+  // Ambil aset gambar surat (Tanda Tangan & Stempel) dari Google Drive (Dapat diakses user & admin)
+  getAsetSurat: (token?: string) =>
+    callAppsScript<{ ttd: string | null; stempel: string | null; hasTtd?: boolean; hasStempel?: boolean }>({
+      action: 'getAsetSurat',
+      token: token || ''
+    }),
 
   // Simpan aset gambar surat ke Google Drive (Khusus Admin)
   simpanAsetSurat: (token: string, jenis: 'ttd' | 'stempel', data: string, mimeType: string) =>

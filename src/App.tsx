@@ -66,23 +66,27 @@ export default function App() {
     }
   }, []);
 
-  // Ambil aset surat (TTD & Stempel) dari server saat ada sesi login
-  useEffect(() => {
-    if (session?.token) {
-      api.getAsetSurat(session.token)
-        .then((res) => {
-          if (res.success) {
-            const newAset: AsetSurat = {
-              ttd: res.ttd ?? null,
-              stempel: res.stempel ?? null,
-            };
-            setAsetSurat(newAset);
-            saveCachedAsetSurat(newAset);
-          }
-        })
-        .catch(() => {});
+  // Ambil aset surat (TTD & Stempel) dari server secara otomatis
+  const refreshAsetSurat = React.useCallback(async (token?: string) => {
+    try {
+      const res = await api.getAsetSurat(token);
+      if (res.success && (res.ttd !== undefined || res.stempel !== undefined)) {
+        const newAset: AsetSurat = {
+          ttd: res.ttd ?? null,
+          stempel: res.stempel ?? null,
+        };
+        setAsetSurat(newAset);
+        saveCachedAsetSurat(newAset);
+      }
+    } catch {
+      // Abaikan jika offline / server belum merespons
     }
-  }, [session?.token]);
+  }, []);
+
+  // Ambil aset saat mount awal & saat token sesi berubah
+  useEffect(() => {
+    refreshAsetSurat(session?.token);
+  }, [session?.token, refreshAsetSurat]);
 
   // Helper Toast
   const showToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -184,10 +188,11 @@ export default function App() {
   };
 
   // SINKRONISASI LIVE BACKGROUND UNTUK PESERTA OJT
-  // Memeriksa pembaruan data toko atau tanggal OJT di spreadsheet secara otomatis
+  // Memeriksa pembaruan data toko atau tanggal OJT & aset surat secara otomatis
   useEffect(() => {
     if (!session || session.role !== 'user') return;
     const interval = setInterval(() => {
+      // 1. Cek perubahan data peserta di sheet DATA_PESERTA
       api.getProfile(session.token)
         .then((res) => {
           if (res.success && res.data && res.data.user) {
@@ -215,10 +220,13 @@ export default function App() {
           }
         })
         .catch(() => {});
+
+      // 2. Cek pembaruan aset tanda tangan & stempel jika admin baru saja mengupload
+      refreshAsetSurat(session.token);
     }, 12000); // Cek setiap 12 detik di background
 
     return () => clearInterval(interval);
-  }, [session?.role, (session as any)?.token]);
+  }, [session?.role, (session as any)?.token, refreshAsetSurat]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">

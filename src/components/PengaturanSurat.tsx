@@ -132,7 +132,7 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
     }
   };
 
-  // Simpan Tanda Tangan ke server
+  // Simpan Tanda Tangan ke server Google Drive
   const handleSaveTtd = async () => {
     if (!ttdDraft) return;
     setIsSavingTtd(true);
@@ -144,23 +144,22 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
         saveCachedAsetSurat(updated);
         onAsetUpdated(updated);
         setTtdDraft(null);
-        showToast('success', 'Berhasil Disimpan', 'Tanda tangan berhasil diupload dan aktif untuk semua surat.');
+        showToast('success', 'Berhasil Disimpan ke Google Drive', 'Tanda tangan aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
       } else {
-        // Jika server offline / izin Drive belum disetujui, simpan lokal sebagai fallback
-        const updated = { ...asetSurat, ttd: ttdDraft };
-        saveCachedAsetSurat(updated);
-        onAsetUpdated(updated);
-        setTtdDraft(null);
-        showToast('success', 'Tersimpan (Lokal)', res.message || 'Tanda tangan disimpan dan aktif di surat.');
+        showToast(
+          'error',
+          'Gagal Simpan ke Google Drive',
+          res.message || 'Gagal menyimpan ke Google Drive. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script dan izin Drive disetujui.'
+        );
       }
     } catch (err: any) {
-      showToast('error', 'Gagal Menyimpan', err.message || 'Gagal menyimpan tanda tangan.');
+      showToast('error', 'Gagal Menghubungi Server', err.message || 'Periksa koneksi internet atau URL Apps Script.');
     } finally {
       setIsSavingTtd(false);
     }
   };
 
-  // Simpan Stempel ke server
+  // Simpan Stempel ke server Google Drive
   const handleSaveStempel = async () => {
     if (!stempelDraft) return;
     setIsSavingStempel(true);
@@ -172,16 +171,16 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
         saveCachedAsetSurat(updated);
         onAsetUpdated(updated);
         setStempelDraft(null);
-        showToast('success', 'Berhasil Disimpan', 'Stempel berhasil diupload dan aktif untuk semua surat.');
+        showToast('success', 'Berhasil Disimpan ke Google Drive', 'Stempel aktif untuk SEMUA peserta dan langsung muncul di surat pengantar.');
       } else {
-        const updated = { ...asetSurat, stempel: stempelDraft };
-        saveCachedAsetSurat(updated);
-        onAsetUpdated(updated);
-        setStempelDraft(null);
-        showToast('success', 'Tersimpan (Lokal)', res.message || 'Stempel disimpan dan aktif di surat.');
+        showToast(
+          'error',
+          'Gagal Simpan ke Google Drive',
+          res.message || 'Gagal menyimpan ke Google Drive. Pastikan file Code.gs versi baru sudah di-Deploy di Apps Script dan izin Drive disetujui.'
+        );
       }
     } catch (err: any) {
-      showToast('error', 'Gagal Menyimpan', err.message || 'Gagal menyimpan stempel.');
+      showToast('error', 'Gagal Menghubungi Server', err.message || 'Periksa koneksi internet atau URL Apps Script.');
     } finally {
       setIsSavingStempel(false);
     }
@@ -233,19 +232,65 @@ export const PengaturanSurat: React.FC<PengaturanSuratProps> = ({
     );
   };
 
+  // Cek dan sinkronkan aset dari Google Drive
+  const [isCheckingDrive, setIsCheckingDrive] = useState(false);
+  const handleCheckDrive = async () => {
+    setIsCheckingDrive(true);
+    try {
+      const res = await api.getAsetSurat(token);
+      if (res.success) {
+        const hasTtd = !!res.ttd;
+        const hasStempel = !!res.stempel;
+        const updated: AsetSurat = {
+          ttd: res.ttd ?? null,
+          stempel: res.stempel ?? null,
+        };
+        saveCachedAsetSurat(updated);
+        onAsetUpdated(updated);
+        showToast(
+          'info',
+          'Status Google Drive',
+          `TTD: ${hasTtd ? 'Tersedia di Drive ✅' : 'Belum diunggah ❌'} | Stempel: ${hasStempel ? 'Tersedia di Drive ✅' : 'Belum diunggah ❌'}`
+        );
+      } else {
+        showToast(
+          'error',
+          'Gagal Mengecek Drive',
+          res.message || 'Apps Script tidak dapat diakses atau belum diperbarui.'
+        );
+      }
+    } catch (err: any) {
+      showToast('error', 'Koneksi Gagal', err.message || 'Gagal terhubung ke Google Apps Script.');
+    } finally {
+      setIsCheckingDrive(false);
+    }
+  };
+
   const activeTtd = ttdDraft || asetSurat.ttd;
   const activeStempel = stempelDraft || asetSurat.stempel;
 
   return (
     <div className="space-y-6">
-      {/* Header Info */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
-        <h3 className="text-base font-bold text-slate-900">
-          Pengaturan Aset Surat (Tanda Tangan & Stempel)
-        </h3>
-        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          Upload file tanda tangan dan cap stempel resmi Training Center Surabaya. File yang disimpan otomatis muncul pada bagian bawah surat pengantar untuk <strong>SEMUA user</strong> dan akan ikut tercetak saat cetak/simpan PDF.
-        </p>
+      {/* Header Info & Sync Button */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 className="text-base font-bold text-slate-900">
+            Pengaturan Aset Surat (Tanda Tangan & Stempel)
+          </h3>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
+            Upload file tanda tangan dan cap stempel resmi Training Center Surabaya. File yang disimpan di Google Drive otomatis muncul pada bagian bawah surat pengantar untuk <strong>SEMUA peserta</strong> dan ikut tercetak saat cetak/simpan PDF.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCheckDrive}
+          disabled={isCheckingDrive}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50"
+          title="Sinkronkan aset langsung dari Google Drive"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDrive ? 'animate-spin' : ''}`} />
+          <span>{isCheckingDrive ? 'Memeriksa...' : 'Cek Status Drive'}</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
