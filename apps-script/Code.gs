@@ -965,3 +965,17 @@ function hapusAsetSurat(token, jenis) {
   };
 }
 
+/**
+ * ============================================================================
+ * FUNGSI BANTUAN UNTUK OTORISASI / IZIN GOOGLE DRIVE
+ * Jalankan fungsi ini langsung dari editor Apps Script (pilih 'authorizeDrive', lalu klik 'Run')
+ * untuk memunculkan jendela pop-up otorisasi "Review permissions".
+ * ============================================================================
+ */
+function authorizeDrive() {
+  Logger.log("Menguji otorisasi Google Drive...");
+  var folder = getOrCreateAsetFolder();
+  Logger.log("Folder berhasil diakses/dibuat dengan ID: " + folder.getId());
+  Logger.log("Nama Folder: " + folder.getName());
+  return "Otorisasi Google Drive BERHASIL! Folder ID: " + folder.getId();
+}
