@@ -109,6 +109,18 @@ function handleRequest(params) {
         result = batchImportPeserta(params.token, params.rows);
         break;
 
+      case "getAsetSurat":
+        result = getAsetSurat(params.token);
+        break;
+
+      case "simpanAsetSurat":
+        result = simpanAsetSurat(params.token, params.jenis, params.data, params.mimeType);
+        break;
+
+      case "hapusAsetSurat":
+        result = hapusAsetSurat(params.token, params.jenis);
+        break;
+
       default:
         result = { success: false, message: "Aksi '" + action + "' tidak valid." };
     }
@@ -683,3 +695,202 @@ function batchImportPeserta(token, rows) {
     updatedCount: updatedCount
   };
 }
+
+/**
+ * ----------------------------------------------------------------------------
+ * PENGATURAN ASET GAMBAR SURAT (TANDA TANGAN & STEMPEL)
+ * Disimpan di Google Drive folder 'OJT_ASET_SURAT'
+ * ID file disimpan di Script Properties: TTD_FILE_ID & STEMPEL_FILE_ID
+ * ----------------------------------------------------------------------------
+ */
+
+var ASET_FOLDER_NAME = "OJT_ASET_SURAT";
+
+/**
+ * Dapatkan atau buat folder OJT_ASET_SURAT di Google Drive
+ */
+function getOrCreateAsetFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty("ASET_FOLDER_ID");
+
+  if (folderId) {
+    try {
+      var existingFolder = DriveApp.getFolderById(folderId);
+      if (!existingFolder.isTrashed()) {
+        return existingFolder;
+      }
+    } catch (e) {
+      // Folder terhapus, akan dibuat ulang di bawah
+    }
+  }
+
+  var folders = DriveApp.getFoldersByName(ASET_FOLDER_NAME);
+  var folder;
+  if (folders.hasNext()) {
+    folder = folders.next();
+  } else {
+    folder = DriveApp.createFolder(ASET_FOLDER_NAME);
+  }
+
+  props.setProperty("ASET_FOLDER_ID", folder.getId());
+  return folder;
+}
+
+/**
+ * Ambil gambar Tanda Tangan & Stempel sebagai data URL base64
+ * Dapat diakses oleh user atau admin dengan token valid
+ */
+function getAsetSurat(token) {
+  var session = verifyToken(token);
+  if (!session) {
+    return { success: false, message: "Sesi tidak valid. Silakan login kembali." };
+  }
+
+  var props = PropertiesService.getScriptProperties();
+  var ttdId = props.getProperty("TTD_FILE_ID");
+  var stempelId = props.getProperty("STEMPEL_FILE_ID");
+
+  var ttdBase64 = null;
+  var stempelBase64 = null;
+
+  // Baca file Tanda Tangan
+  if (ttdId) {
+    try {
+      var fileTtd = DriveApp.getFileById(ttdId);
+      if (!fileTtd.isTrashed()) {
+        var blobTtd = fileTtd.getBlob();
+        ttdBase64 = "data:" + blobTtd.getContentType() + ";base64," + Utilities.base64Encode(blobTtd.getBytes());
+      } else {
+        props.deleteProperty("TTD_FILE_ID");
+      }
+    } catch (e) {
+      props.deleteProperty("TTD_FILE_ID");
+    }
+  }
+
+  // Baca file Stempel
+  if (stempelId) {
+    try {
+      var fileStempel = DriveApp.getFileById(stempelId);
+      if (!fileStempel.isTrashed()) {
+        var blobStempel = fileStempel.getBlob();
+        stempelBase64 = "data:" + blobStempel.getContentType() + ";base64," + Utilities.base64Encode(blobStempel.getBytes());
+      } else {
+        props.deleteProperty("STEMPEL_FILE_ID");
+      }
+    } catch (e) {
+      props.deleteProperty("STEMPEL_FILE_ID");
+    }
+  }
+
+  return {
+    success: true,
+    ttd: ttdBase64,
+    stempel: stempelBase64
+  };
+}
+
+/**
+ * Simpan file gambar Tanda Tangan atau Stempel ke Google Drive (Khusus Admin)
+ */
+function simpanAsetSurat(token, jenis, base64Data, mimeType) {
+  var session = verifyToken(token);
+  if (!session || session.role !== "admin") {
+    return { success: false, message: "Akses ditolak. Hanya untuk Admin." };
+  }
+
+  if (jenis !== "ttd" && jenis !== "stempel") {
+    return { success: false, message: "Jenis gambar tidak valid (harus 'ttd' atau 'stempel')." };
+  }
+
+  if (!base64Data) {
+    return { success: false, message: "Data gambar tidak boleh kosong." };
+  }
+
+  // Bersihkan data URL jika ada prefix
+  var cleanBase64 = String(base64Data);
+  var detectedMime = mimeType || "image/png";
+  if (cleanBase64.indexOf("base64,") !== -1) {
+    var parts = cleanBase64.split("base64,");
+    var mimePart = parts[0];
+    if (mimePart.indexOf("image/jpeg") !== -1 || mimePart.indexOf("image/jpg") !== -1) {
+      detectedMime = "image/jpeg";
+    } else {
+      detectedMime = "image/png";
+    }
+    cleanBase64 = parts[1];
+  }
+
+  if (detectedMime !== "image/png" && detectedMime !== "image/jpeg") {
+    return { success: false, message: "Format gambar harus PNG atau JPG/JPEG." };
+  }
+
+  var bytes = Utilities.base64Decode(cleanBase64);
+  if (bytes.length > 2 * 1024 * 1024) {
+    return { success: false, message: "Ukuran file melebihi batas 2 MB." };
+  }
+
+  var folder = getOrCreateAsetFolder();
+  var props = PropertiesService.getScriptProperties();
+  var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
+  var oldId = props.getProperty(propKey);
+
+  // Hapus (trash) file lama dari Drive agar tidak menumpuk
+  if (oldId) {
+    try {
+      var oldFile = DriveApp.getFileById(oldId);
+      oldFile.setTrashed(true);
+    } catch (e) {}
+  }
+
+  var ext = detectedMime === "image/jpeg" ? "jpg" : "png";
+  var label = jenis === "ttd" ? "TTD_TC_SURABAYA" : "STEMPEL_TC_SURABAYA";
+  var fileName = label + "_" + new Date().getTime() + "." + ext;
+  var blob = Utilities.newBlob(bytes, detectedMime, fileName);
+  var newFile = folder.createFile(blob);
+
+  props.setProperty(propKey, newFile.getId());
+
+  var fullDataUrl = "data:" + detectedMime + ";base64," + cleanBase64;
+
+  return {
+    success: true,
+    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil disimpan ke Google Drive.",
+    jenis: jenis,
+    fileId: newFile.getId(),
+    dataUrl: fullDataUrl
+  };
+}
+
+/**
+ * Hapus gambar Tanda Tangan atau Stempel dari Google Drive (Khusus Admin)
+ */
+function hapusAsetSurat(token, jenis) {
+  var session = verifyToken(token);
+  if (!session || session.role !== "admin") {
+    return { success: false, message: "Akses ditolak. Hanya untuk Admin." };
+  }
+
+  if (jenis !== "ttd" && jenis !== "stempel") {
+    return { success: false, message: "Jenis gambar tidak valid." };
+  }
+
+  var props = PropertiesService.getScriptProperties();
+  var propKey = jenis === "ttd" ? "TTD_FILE_ID" : "STEMPEL_FILE_ID";
+  var oldId = props.getProperty(propKey);
+
+  if (oldId) {
+    try {
+      var oldFile = DriveApp.getFileById(oldId);
+      oldFile.setTrashed(true);
+    } catch (e) {}
+    props.deleteProperty(propKey);
+  }
+
+  return {
+    success: true,
+    message: (jenis === "ttd" ? "Tanda tangan" : "Stempel") + " berhasil dihapus.",
+    jenis: jenis
+  };
+}
+

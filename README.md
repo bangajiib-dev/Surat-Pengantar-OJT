@@ -186,17 +186,26 @@ surat-pengantar-ojt/
 
 ---
 
-## 🖋️ Kustomisasi Stempel & Tanda Tangan
+## 🖋️ Pengaturan Tanda Tangan & Stempel (Admin)
 
-Aplikasi sudah dilengkapi dengan aset stempel bulat **PT. INDOMARCO PRISMATAMA - SURABAYA** dan tanda tangan digital bawaan di file:
-- `/public/stempel.png`
-- `/public/stempel.svg`
+Admin dapat langsung mengunggah file **Tanda Tangan Trainer** dan **Cap / Stempel Resmi** melalui tab **"Pengaturan Surat"** di Dashboard Admin:
 
-Jika Anda ingin mengganti dengan hasil scan stempel asli cabang Anda:
-1. Siapkan gambar scan stempel berlatar belakang transparan (format `.png`).
-2. Beri nama file: `stempel.png`.
-3. Ganti file yang ada di folder `/public/stempel.png`.
-4. Surat otomatis akan menampilkan stempel baru Anda!
+1. **Upload Langsung dari Dashboard:**
+   - Masuk ke akun Admin (default: `admin` / `Tcsby123`).
+   - Buka tab **"Pengaturan Surat (TTD & Stempel)"**.
+   - Terdapat 2 kartu pengaturan:
+     - **Tanda Tangan Trainer (Wajib)**: Atas nama *Abdul Rokhman K*.
+     - **Cap / Stempel Resmi (Opsional)**: Cap *PT. INDOMARCO PRISMATAMA - SURABAYA*.
+2. **Optimalisasi Otomatis:**
+   - Gambar otomatis dikompresi di sisi browser (lebar maksimal 600px dengan mempertahankan transparansi PNG) sehingga hemat bandwidth dan cepat dimuat.
+   - Tersedia tombol pratinjau langsung sebelum disimpan.
+3. **Penyimpanan di Google Drive:**
+   - File tersimpan di folder Google Drive bernama `OJT_ASET_SURAT`.
+   - ID file tersimpan di Script Properties (`TTD_FILE_ID` dan `STEMPEL_FILE_ID`).
+   - File lama otomatis dibersihkan (ditransfer ke Sampah/Trash) setiap ada unggahan baru agar kapasitas Google Drive tetap rapi.
+4. **Otomatis Aktif untuk Semua User:**
+   - Surat peserta dan pratinjau surat admin otomatis menampilkan tanda tangan dan stempel terbaru secara langsung tanpa perlu deploy ulang atau mengedit kode.
+   - Gambar ikut tercetak dengan presisi saat melakukan **Cetak / Simpan PDF**.
 
 ---
 

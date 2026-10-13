@@ -4,8 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AuthSession, UserSession, Peserta, ToastMessage } from './types';
-import { getSavedSession, saveSession, clearSession, getAppsScriptUrl, api } from './services/api';
+import { AuthSession, UserSession, Peserta, ToastMessage, AsetSurat } from './types';
+import {
+  getSavedSession,
+  saveSession,
+  clearSession,
+  getAppsScriptUrl,
+  getCachedAsetSurat,
+  saveCachedAsetSurat,
+  api
+} from './services/api';
 import { Header } from './components/Header';
 import { LoginForm } from './components/LoginForm';
 import { UserBar } from './components/UserBar';
@@ -21,6 +29,7 @@ import { ToastContainer, ConfirmModal } from './components/Toast';
 export default function App() {
   const [session, setSession] = useState<AuthSession>(null);
   const [appsScriptUrl, setAppsScriptUrl] = useState<string>(getAppsScriptUrl());
+  const [asetSurat, setAsetSurat] = useState<AsetSurat>(() => getCachedAsetSurat());
 
   // Toasts State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -56,6 +65,24 @@ export default function App() {
       setSession(saved);
     }
   }, []);
+
+  // Ambil aset surat (TTD & Stempel) dari server saat ada sesi login
+  useEffect(() => {
+    if (session?.token) {
+      api.getAsetSurat(session.token)
+        .then((res) => {
+          if (res.success) {
+            const newAset: AsetSurat = {
+              ttd: res.ttd ?? null,
+              stempel: res.stempel ?? null,
+            };
+            setAsetSurat(newAset);
+            saveCachedAsetSurat(newAset);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session?.token]);
 
   // Helper Toast
   const showToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -156,8 +183,6 @@ export default function App() {
     }
   };
 
-  const [isUserSyncing, setIsUserSyncing] = useState(false);
-
   // SINKRONISASI LIVE BACKGROUND UNTUK PESERTA OJT
   // Memeriksa pembaruan data toko atau tanggal OJT di spreadsheet secara otomatis
   useEffect(() => {
@@ -195,34 +220,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [session?.role, (session as any)?.token]);
 
-  // Handler Singkronkan Data Peserta Manual 1-Klik
-  const handleUserSync = async () => {
-    if (!session || session.role !== 'user') return;
-    setIsUserSyncing(true);
-    try {
-      const res = await api.getProfile(session.token);
-      if (res.success && res.data && res.data.user) {
-        const u = res.data.user;
-        const updated: UserSession = {
-          ...session,
-          nama: u.nama,
-          kodeToko: u.kodeToko,
-          namaToko: u.namaToko,
-          tanggalOjt: u.tanggalOjt,
-        };
-        setSession(updated);
-        saveSession(updated);
-        showToast('success', 'Sinkronisasi Berhasil', 'Data surat diperbarui sesuai baris spreadsheet terbaru.');
-      } else {
-        showToast('info', 'Status Data', 'Data surat Anda sudah sesuai dengan spreadsheet.');
-      }
-    } catch (err: any) {
-      showToast('error', 'Gagal Singkron', err.message || 'Tidak dapat terhubung ke server spreadsheet.');
-    } finally {
-      setIsUserSyncing(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Header Aplikasi (Tersembunyi saat cetak) */}
@@ -233,12 +230,10 @@ export default function App() {
         {session?.role === 'user' ? (
           // TAMPILAN USER (PESERTA OJT)
           <div>
-            {/* User Bar di bagian atas (NIP, Nama, Tombol Cetak, Singkronkan Data, & Keluar) */}
+            {/* User Bar di bagian atas (NIP, Nama, & Keluar) */}
             <UserBar
               user={session}
               onLogout={handleLogout}
-              onSync={handleUserSync}
-              isSyncing={isUserSyncing}
             />
 
             {/* Kontainer Surat Pengantar OJT */}
@@ -252,12 +247,13 @@ export default function App() {
                     namaToko: session.namaToko,
                     tanggalOjt: session.tanggalOjt,
                   }}
+                  asetSurat={asetSurat}
                 />
               </div>
             </div>
           </div>
         ) : session?.role === 'admin' ? (
-          // TAMPILAN ADMIN (DASHBOARD KELOLA DATA)
+          // TAMPILAN ADMIN (DASHBOARD KELOLA DATA & PENGATURAN SURAT)
           <AdminDashboard
             session={session}
             showToast={showToast}
@@ -275,6 +271,8 @@ export default function App() {
               setIsModalPesertaOpen(true);
             }}
             onOpenImport={() => setIsModalImportOpen(true)}
+            asetSurat={asetSurat}
+            onAsetUpdated={(updated) => setAsetSurat(updated)}
           />
         ) : (
           // TAMPILAN BELUM LOGIN (FORM LOGIN)
@@ -313,6 +311,7 @@ export default function App() {
           setPreviewPeserta(null);
         }}
         peserta={previewPeserta}
+        asetSurat={asetSurat}
       />
 
       <ModalSettings

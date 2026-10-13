@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({ session, onLogout }) => {
           />
           <div className="border-l border-slate-300 pl-3">
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight">
-              Surat Pengantar OJT Tc Surabaya
+              Surat Pengantar OJT
             </h1>
             <p className="text-xs text-slate-500 font-medium hidden sm:block">
               PT. Indomarco Prismatama · Cabang Surabaya

@@ -98,8 +98,36 @@ export const api = {
 
   // Import Massal banyak peserta sekaligus ke sheet DATA_PESERTA
   batchImportPeserta: (token: string, rows: Peserta[]) =>
-    callAppsScript({ action: 'batchImportPeserta', token, rows })
+    callAppsScript({ action: 'batchImportPeserta', token, rows }),
+
+  // Ambil aset gambar surat (Tanda Tangan & Stempel) dari Google Drive
+  getAsetSurat: (token: string) =>
+    callAppsScript<{ ttd: string | null; stempel: string | null }>({ action: 'getAsetSurat', token }),
+
+  // Simpan aset gambar surat ke Google Drive (Khusus Admin)
+  simpanAsetSurat: (token: string, jenis: 'ttd' | 'stempel', data: string, mimeType: string) =>
+    callAppsScript({ action: 'simpanAsetSurat', token, jenis, data, mimeType }),
+
+  // Hapus aset gambar surat dari Google Drive (Khusus Admin)
+  hapusAsetSurat: (token: string, jenis: 'ttd' | 'stempel') =>
+    callAppsScript({ action: 'hapusAsetSurat', token, jenis })
 };
+
+const STORAGE_KEY_ASET = 'tc_sby_aset_surat';
+
+export function getCachedAsetSurat(): { ttd: string | null; stempel: string | null } {
+  const raw = localStorage.getItem(STORAGE_KEY_ASET);
+  if (!raw) return { ttd: null, stempel: null };
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { ttd: null, stempel: null };
+  }
+}
+
+export function saveCachedAsetSurat(aset: { ttd: string | null; stempel: string | null }) {
+  localStorage.setItem(STORAGE_KEY_ASET, JSON.stringify(aset));
+}
 
 // Helper Sesi
 export function saveSession(session: UserSession | AdminSession) {

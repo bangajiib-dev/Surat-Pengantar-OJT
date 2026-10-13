@@ -27,6 +27,11 @@ export interface AdminSession {
 
 export type AuthSession = UserSession | AdminSession | null;
 
+export interface AsetSurat {
+  ttd: string | null;
+  stempel: string | null;
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -36,6 +41,8 @@ export interface ApiResponse<T = any> {
   peserta?: Peserta;
   admin?: { username: string };
   data?: T;
+  ttd?: string | null;
+  stempel?: string | null;
   addedCount?: number;
   updatedCount?: number;
 }

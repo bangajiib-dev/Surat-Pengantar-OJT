@@ -3,9 +3,13 @@ import { Peserta } from '../types';
 
 interface SuratOJTProps {
   peserta: Peserta;
+  asetSurat?: {
+    ttd: string | null;
+    stempel: string | null;
+  } | null;
 }
 
-export const SuratOJT: React.FC<SuratOJTProps> = ({ peserta }) => {
+export const SuratOJT: React.FC<SuratOJTProps> = ({ peserta, asetSurat }) => {
   // Format data variabel atau tampilkan '-' jika kosong
   const nip = peserta.nip ? peserta.nip.trim() : '-';
   const nama = peserta.nama ? peserta.nama.trim().toUpperCase() : '-';
@@ -190,24 +194,30 @@ export const SuratOJT: React.FC<SuratOJTProps> = ({ peserta }) => {
 
       {/* TANDA TANGAN & STEMPEL (KANAN BAWAH) */}
       <div className="mt-4 flex justify-end">
-        <div className="text-center w-60 relative flex flex-col items-center">
+        <div className="text-center w-64 relative flex flex-col items-center">
           <p className="font-normal text-[13px] mb-1">Training Center Surabaya</p>
 
-          {/* Area Stempel & Tanda Tangan */}
-          <div className="relative w-40 h-24 my-0.5 flex items-center justify-center">
-            {/* Stempel bulat PT Indomarco Prismatama + Tanda tangan */}
-            <img
-              src="/stempel.png"
-              alt="Stempel PT Indomarco Prismatama Training Center Surabaya"
-              className="w-36 h-36 object-contain pointer-events-none select-none drop-shadow-sm -my-4"
-              onError={(e) => {
-                // Fallback otomatis ke SVG jika file PNG belum diganti user
-                const target = e.currentTarget;
-                if (!target.src.endsWith('.svg')) {
-                  target.src = '/stempel.svg';
-                }
-              }}
-            />
+          {/* Area TTD & Stempel: tinggi tetap 80px agar layout presisi dan tidak bergeser */}
+          <div className="relative w-56 h-[80px] my-1 flex items-center justify-center overflow-visible">
+            {/* Stempel (jika ada): ditaruh di sisi kiri tanda tangan, sebagian menimpa ttd */}
+            {asetSurat?.stempel && (
+              <img
+                src={asetSurat.stempel}
+                alt="Stempel PT Indomarco Prismatama"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-[95px] h-[95px] object-contain opacity-90 pointer-events-none select-none z-10 print:opacity-100"
+                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+              />
+            )}
+
+            {/* Tanda Tangan: di tengah area */}
+            {asetSurat?.ttd && (
+              <img
+                src={asetSurat.ttd}
+                alt="Tanda Tangan Abdul Rokhman K"
+                className="relative z-20 max-h-[82px] max-w-[170px] object-contain pointer-events-none select-none"
+                style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+              />
+            )}
           </div>
 
           {/* Nama Penanda Tangan */}

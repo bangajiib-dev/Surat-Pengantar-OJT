@@ -1,18 +1,20 @@
 import React from 'react';
 import { X, Printer, Download } from 'lucide-react';
-import { Peserta } from '../types';
+import { Peserta, AsetSurat } from '../types';
 import { SuratOJT } from './SuratOJT';
 
 interface ModalSuratPreviewProps {
   isOpen: boolean;
   onClose: () => void;
   peserta: Peserta | null;
+  asetSurat?: AsetSurat | null;
 }
 
 export const ModalSuratPreview: React.FC<ModalSuratPreviewProps> = ({
   isOpen,
   onClose,
   peserta,
+  asetSurat,
 }) => {
   if (!isOpen || !peserta) return null;
 
@@ -53,7 +55,7 @@ export const ModalSuratPreview: React.FC<ModalSuratPreviewProps> = ({
         {/* Scrollable Letter Document Canvas */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center print:p-0 print:bg-white print:overflow-visible">
           <div className="w-full max-w-[210mm]">
-            <SuratOJT peserta={peserta} />
+            <SuratOJT peserta={peserta} asetSurat={asetSurat} />
           </div>
         </div>
       </div>

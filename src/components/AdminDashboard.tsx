@@ -9,14 +9,14 @@ import {
   Edit2,
   Trash2,
   Store,
-  Calendar,
-  KeyRound,
   Download,
   Eye,
-  SlidersHorizontal
+  SlidersHorizontal,
+  FileSignature
 } from 'lucide-react';
-import { Peserta, AdminSession } from '../types';
+import { Peserta, AdminSession, AsetSurat } from '../types';
 import { api } from '../services/api';
+import { PengaturanSurat } from './PengaturanSurat';
 
 interface AdminDashboardProps {
   session: AdminSession;
@@ -26,6 +26,8 @@ interface AdminDashboardProps {
   onAddPeserta: () => void;
   onEditPeserta: (peserta: Peserta) => void;
   onOpenImport: () => void;
+  asetSurat: AsetSurat;
+  onAsetUpdated: (aset: AsetSurat) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -36,11 +38,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddPeserta,
   onEditPeserta,
   onOpenImport,
+  asetSurat,
+  onAsetUpdated,
 }) => {
+  const [activeAdminTab, setActiveAdminTab] = useState<'peserta' | 'pengaturan'>('peserta');
   const [pesertaList, setPesertaList] = useState<Peserta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string>('Memuat...');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTokoFilter, setSelectedTokoFilter] = useState('ALL');
 
@@ -53,9 +57,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const res = await api.getAllPeserta(session.token);
       if (res.success && res.data) {
         setPesertaList(res.data);
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setLastSyncTime(timeStr);
 
         if (isManualClick) {
           showToast('success', 'Sinkronisasi Berhasil', `Data diperbarui dari Google Spreadsheet (${res.data.length} peserta).`);
@@ -89,8 +90,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         .then((res) => {
           if (res.success && res.data) {
             setPesertaList(res.data);
-            const now = new Date();
-            setLastSyncTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
           }
         })
         .catch(() => {
@@ -183,8 +182,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* Top Banner & Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Tab Navigation: Daftar Peserta & Pengaturan Surat */}
+      <div className="flex border-b border-slate-200 gap-2">
+        <button
+          onClick={() => setActiveAdminTab('peserta')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
+            activeAdminTab === 'peserta'
+              ? 'border-[#005EAA] text-[#005EAA]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Daftar Peserta</span>
+          <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-mono">
+            {pesertaList.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveAdminTab('pengaturan')}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
+            activeAdminTab === 'pengaturan'
+              ? 'border-[#005EAA] text-[#005EAA]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <FileSignature className="w-4 h-4" />
+          <span>Pengaturan Surat (TTD & Stempel)</span>
+        </button>
+      </div>
+
+      {activeAdminTab === 'pengaturan' ? (
+        <PengaturanSurat
+          token={session.token}
+          asetSurat={asetSurat}
+          onAsetUpdated={onAsetUpdated}
+          showToast={showToast}
+          openConfirmModal={openConfirmModal}
+        />
+      ) : (
+        <>
+          {/* Top Banner & Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Stat 1: Total Peserta */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#005EAA] flex items-center justify-center shrink-0">
@@ -282,11 +321,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Buttons Action */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Status Live Sync Indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-xs text-slate-600 border border-slate-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live Sync: <strong className="font-mono text-slate-800">{lastSyncTime}</strong></span>
-          </div>
 
           {/* Tombol Singkronkan Data 1-Klik */}
           <button
@@ -443,6 +477,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <span>PT. Indomarco Prismatama Cabang Surabaya</span>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };
